@@ -17,6 +17,9 @@ from translators.dummy_translator import (
     dummy_translate_with_claude,
     dummy_translate_with_gemini
 )
+from regenerators.docx_regenerator import create_docx_from_text
+from regenerators.pptx_regenerator import create_pptx_from_text
+from regenerators.xlsx_regenerator import create_xlsx_from_text
 
 # --- DUMMY MODE SWITCH ---
 if DUMMY_MODE:
@@ -129,27 +132,37 @@ def csv_handshake_worker():
                 for t in threads: t.start()
                 for t in threads: t.join()
                 print("[INFO] All translations complete. Saving results...")
+                # --- NEW REGENERATION LOGIC using a dictionary ---
+                REGENERATORS = {
+                    '.docx': create_docx_from_text,
+                    '.pptx': create_pptx_from_text,
+                    '.xlsx': create_xlsx_from_text,
+                }
+                # Determine the file extension of the original source file
+                original_extension = os.path.splitext(source_filepath)[1]
+                # Check if we have a special regenerator for this file type
+                regenerator_func = REGENERATORS.get(original_extension)
 
-                # Save results from the completed translations
                 for service, result in translations.items():
                     if result and not result.startswith("Error:"):
-                        # --- NEW REGENERATION LOGIC ---
-                        if source_filepath.endswith('.docx'):
-                            output_filename = f"job_{job_id}_{target_lang}_{service}.docx"
+                        base_name_without_ext = os.path.splitext(os.path.basename(source_filepath))[0]
+                        if regenerator_func:
+                            # Use the special regenerator
+                            output_filename = f"{base_name_without_ext}_{service}{original_extension}"
                             output_path = os.path.join(OUTPUTS_DIR, output_filename)
-                            # Call the regenerator instead of writing a .txt
-                            regen_status = create_docx_from_text(source_filepath, result, output_path)
+                            regen_status = regenerator_func(source_filepath, result, output_path)
                             if regen_status.startswith("Error:"):
                                 print(f"[ERROR] {service.capitalize()}: {regen_status}")
                             else:
                                 print(f"[SUCCESS] {service.capitalize()} translation regenerated to {output_filename}")
-                        else: # Fallback for .txt files
-                            output_filename = f"job_{job_id}_{target_lang}_{service}.txt"
+                        else:
+                            # Fallback for .txt files
+                            output_filename = f"{base_name_without_ext}_{service}.txt"
                             output_path = os.path.join(OUTPUTS_DIR, output_filename)
                             with open(output_path, 'w', encoding='utf-8') as f:
                                 f.write(result)
                             print(f"[SUCCESS] {service.capitalize()} translation saved to {output_filename}")
-                        # --- END NEW REGENERATION LOGIC ---
+                # --- END NEW REGENERATION LOGIC ---
                 log_processed_job(job_link)
                 print(f"[INFO] Job ID: {job_id} Finished & Logged.")
             else:
@@ -212,25 +225,32 @@ class HotFolderHandler(FileSystemEventHandler):
             t.join()
 
         print("[INFO] All ad-hoc translations complete. Saving results...")
+        REGENERATORS = {
+            '.docx': create_docx_from_text,
+            '.pptx': create_pptx_from_text,
+            '.xlsx': create_xlsx_from_text,
+        }
+        original_extension = os.path.splitext(event.src_path)[1]
+        regenerator_func = REGENERATORS.get(original_extension)
+        base_name_without_ext = os.path.splitext(os.path.basename(event.src_path))[0]
         success_count = 0
         for service, result in translations.items():
             if result and not result.startswith("Error:"):
-                # Regeneration logic for docx
-                if filename.endswith('.docx'):
-                    output_filename = f"{base_name}_translated_{service}.docx"
+                if regenerator_func:
+                    output_filename = f"{base_name_without_ext}_{service}{original_extension}"
                     output_path = os.path.join(OUTPUTS_DIR, output_filename)
-                    regen_status = create_docx_from_text(event.src_path, result, output_path)
+                    regen_status = regenerator_func(event.src_path, result, output_path)
                     if regen_status.startswith("Error:"):
                         print(f"[ERROR] {service.capitalize()}: {regen_status}")
                     else:
                         print(f"[SUCCESS] {service.capitalize()} translation regenerated to {output_filename}")
-                else: # Fallback for .txt files
-                    output_filename = f"{base_name}_translated_{service}.txt"
-                    with open(os.path.join(OUTPUTS_DIR, output_filename), 'w', encoding='utf-8') as f:
+                else:
+                    output_filename = f"{base_name_without_ext}_{service}.txt"
+                    output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                    with open(output_path, 'w', encoding='utf-8') as f:
                         f.write(result)
                     print(f"[SUCCESS] {service.capitalize()} ad-hoc translation saved to {output_filename}")
                 success_count += 1
-        
         if success_count == 0:
             print("[ERROR] All translation services failed for the ad-hoc job.")
 
