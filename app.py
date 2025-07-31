@@ -11,8 +11,7 @@ from translators.gpt_translator import translate_with_gpt
 from translators.claude_translator import translate_with_claude
 from translators.gemini_translator import translate_with_gemini
 from fetchers.file_fetcher import get_text_from_file
-
-from config import DUMMY_MODE
+from config import DUMMY_MODE, DEFAULT_SOURCE_LANGUAGE, DEFAULT_TARGET_LANGUAGE
 from translators.dummy_translator import (
     dummy_translate_with_gpt,
     dummy_translate_with_claude,
@@ -162,7 +161,9 @@ def csv_handshake_worker():
 # --- Hot Folder Worker ---
 class HotFolderHandler(FileSystemEventHandler):
     def on_created(self, event):
-        if event.is_directory: return
+        if event.is_directory:
+            return
+
         filename = os.path.basename(event.src_path)
         job_id_match = re.match(r'^(\d+)', filename)
         if job_id_match and job_id_match.group(1) in active_handshake_jobs:
@@ -171,36 +172,69 @@ class HotFolderHandler(FileSystemEventHandler):
 
         print(f"\n[INFO] Hot Folder: Detected new ad-hoc file '{filename}'.")
         base_name = os.path.splitext(filename)[0]
+
+        # --- NEW DEFAULTING LOGIC ---
+        source_lang = DEFAULT_SOURCE_LANGUAGE
+        target_lang = DEFAULT_TARGET_LANGUAGE
+        
         if '_to_' in base_name:
+            # If the filename specifies a target language, override the default.
             parts = base_name.split('_to_')
             target_lang = parts[-1]
-            source_text = get_text_from_file(event.src_path)
-            print(f"[INFO] Ad-hoc job detected. Translating to '{target_lang}' with all LLMs in parallel...")
-            translations = {}
-            threads = []
-            def run_translation(service, func):
-                print(f"  -> Starting ad-hoc translation with {service}...")
-                translations[service] = func(source_text, target_lang)
-                print(f"  -> Finished ad-hoc translation with {service}.")
-            gpt_thread = threading.Thread(target=run_translation, args=("gpt", translate_with_gpt))
-            claude_thread = threading.Thread(target=run_translation, args=("claude", translate_with_claude))
-            gemini_thread = threading.Thread(target=run_translation, args=("gemini", translate_with_gemini))
-            threads.extend([gpt_thread, claude_thread, gemini_thread])
-            for t in threads: t.start()
-            for t in threads: t.join()
-            print("[INFO] All ad-hoc translations complete. Saving results...")
-            success_count = 0
-            for service, result in translations.items():
-                if result and not result.startswith("Error:"):
+            print(f"[INFO] Target language specified in filename: '{target_lang}'.")
+        else:
+            # Otherwise, use the defaults we defined in config.py
+            print(f"[INFO] No target language specified. Using default: {source_lang} -> {target_lang}.")
+        # --- END NEW DEFAULTING LOGIC ---
+
+        source_text = get_text_from_file(event.src_path)
+        if source_text.startswith("Error:"):
+            print(f"[ERROR] Could not process file: {source_text}")
+            return
+
+        print(f"[INFO] Translating from '{source_lang}' to '{target_lang}' with all LLMs...")
+
+        translations = {}
+        threads = []
+        def run_translation(service, func):
+            print(f"  -> Starting ad-hoc translation with {service}...")
+            translations[service] = func(source_text, target_lang, source_lang) # Pass all three args now
+            print(f"  -> Finished ad-hoc translation with {service}.")
+
+        gpt_thread = threading.Thread(target=run_translation, args=("gpt", translate_with_gpt))
+        claude_thread = threading.Thread(target=run_translation, args=("claude", translate_with_claude))
+        gemini_thread = threading.Thread(target=run_translation, args=("gemini", translate_with_gemini))
+        threads.extend([gpt_thread, claude_thread, gemini_thread])
+        
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        print("[INFO] All ad-hoc translations complete. Saving results...")
+        success_count = 0
+        for service, result in translations.items():
+            if result and not result.startswith("Error:"):
+                # Regeneration logic for docx
+                if filename.endswith('.docx'):
+                    output_filename = f"{base_name}_translated_{service}.docx"
+                    output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                    regen_status = create_docx_from_text(event.src_path, result, output_path)
+                    if regen_status.startswith("Error:"):
+                        print(f"[ERROR] {service.capitalize()}: {regen_status}")
+                    else:
+                        print(f"[SUCCESS] {service.capitalize()} translation regenerated to {output_filename}")
+                else: # Fallback for .txt files
                     output_filename = f"{base_name}_translated_{service}.txt"
                     with open(os.path.join(OUTPUTS_DIR, output_filename), 'w', encoding='utf-8') as f:
                         f.write(result)
                     print(f"[SUCCESS] {service.capitalize()} ad-hoc translation saved to {output_filename}")
-                    success_count += 1
-            if success_count == 0:
-                print("[ERROR] All translation services failed for the ad-hoc job.")
+                success_count += 1
+        
+        if success_count == 0:
+            print("[ERROR] All translation services failed for the ad-hoc job.")
 
-# --- THIS FUNCTION WAS MISSING ---
+
 def folder_monitor_worker():
     """Initializes and runs the watchdog observer."""
     print("[INFO] Hot Folder Worker: Started.")
@@ -212,7 +246,6 @@ def folder_monitor_worker():
     except KeyboardInterrupt:
         observer.stop()
     observer.join()
-# --- END MISSING FUNCTION ---
 
 # --- Main Thread Orchestrator ---
 if __name__ == "__main__":
