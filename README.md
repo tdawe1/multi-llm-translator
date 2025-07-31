@@ -107,9 +107,49 @@ All major settings are controlled from your `.env` file.
 | `DEFAULT_TARGET_LANGUAGE` | `English`, `German`, etc.         | The target language to assume for hot folder files.                                                      |
 | `DUMMY_MODE`              | `True`, `False`                   | If `True`, the app simulates API calls without using tokens, allowing for free testing of the logic.     |
 
+## Cost Estimation
+
+The cost of using this application is directly tied to the API usage of the underlying LLMs. The total cost depends on four main factors: **document size**, **operation mode**, **model choice**, and the **provider's pricing**.
+
+### Cost Factors
+
+1.  **Document Size**: Larger documents mean more tokens, which directly increases cost.
+2.  **Operation Mode (`.env`)**: This is the biggest driver of cost.
+    - **`SIMPLE`**: The cheapest mode (1 API call).
+    - **`PARALLEL`**: Moderately expensive (3 API calls).
+    - **`CRITIQUE`**: The most expensive mode (1 translation + 2 larger critique calls). Can be **5-7x more expensive** than `SIMPLE` mode.
+3.  **Model Choice**: The models used in this script were chosen for their balance of quality and cost. However, prices can change.
+4.  **API Pricing**: You should always refer to the official pricing pages for the most current information.
+    - [OpenAI Pricing](https://openai.com/pricing)
+    - [Anthropic (Claude) Pricing](https://www.anthropic.com/pricing)
+    - [Google (Gemini) Pricing](https://ai.google.dev/pricing)
+
+### Example Cost Breakdown
+
+Here is a rough cost estimate for processing a **1,000-word document** (approx. 1,300 tokens), based on pricing as of July 2025.
+
+| Mode                      | Calculation Breakdown                                                                | Estimated Cost                     |
+| :------------------------ | :----------------------------------------------------------------------------------- | :--------------------------------- |
+| **`SIMPLE`** (GPT Primary) | Cost of one translation with GPT-4o-mini.                                            | **~ $0.001** (a tenth of a cent)   |
+| **`PARALLEL`**            | Cost of (1 GPT + 1 Claude + 1 Gemini) translations.                                  | **~ $0.04** (about 4 cents)      |
+| **`CRITIQUE`** (GPT Primary)  | Cost of (1 GPT translation + 1 Claude critique + 1 Gemini critique). The critique calls have much larger inputs. | **~ $0.06** (about 6 cents)      |
+
+As you can see, costs can rise quickly with the more advanced modes.
+
+### Cost Management Best Practices
+
+- **Use `DUMMY_MODE=True` for all testing.**
+- Use `SIMPLE` mode for bulk, day-to-day translations.
+- Use `PARALLEL` or `CRITIQUE` modes for important jobs that require quality comparison or refinement.
+- **Set billing alerts** in your OpenAI, Anthropic, and Google Cloud dashboards to prevent unexpected costs.
 
 ## Future Work
 
 - [ ] **Streamlit UI**: Build the user interface for reviewing translations side-by-side.
 - [ ] **Advanced Regeneration**: Add support for preserving more complex formatting (styles, tables, images).
 - [ ] **Job Status Tracking**: Implement a more robust system for tracking job status (`pending`, `processed`, `error`).
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+```
