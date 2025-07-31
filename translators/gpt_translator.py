@@ -36,7 +36,7 @@ def translate_with_gpt(text: str, target_language: str, source_language: str = "
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-4-turbo",  # Using a fast and powerful model
+            model="gpt-4o-mini",  
             messages=[
                 {"role": "system", "content": "You are a highly skilled translation engine."},
                 {"role": "user", "content": prompt}

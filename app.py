@@ -23,7 +23,7 @@ POLL_INTERVAL = 60
 
 active_handshake_jobs = set()
 
-# --- Helper Functions (Unchanged) ---
+# --- Helper Functions ---
 def parse_languages(title: str) -> (str, str):
     match = re.search(r'([\w\s]+)/([\w\s]+)', title)
     return (match.group(1).strip(), match.group(2).strip()) if match else (None, None)
@@ -56,17 +56,14 @@ def csv_handshake_worker():
         try:
             if not os.path.exists(JOBS_FEED_CSV_PATH):
                 raise FileNotFoundError
-            
             df = pd.read_csv(JOBS_FEED_CSV_PATH, sep=',')
             df.columns = [c.strip().lower() for c in df.columns]
-            
             if 'link' not in df.columns or 'title' not in df.columns:
                 print(f"\n[ERROR] CSV format issue: Required columns ('link', 'title') not found in '{JOBS_FEED_CSV_PATH}'.")
                 print(f"[INFO] Columns Found: {list(df.columns)}")
                 print(f"[INFO] Waiting {POLL_INTERVAL} seconds...")
                 time.sleep(POLL_INTERVAL)
                 continue
-
         except FileNotFoundError:
             print(f"\n[INFO] CSV Worker: Job feed not found at '{JOBS_FEED_CSV_PATH}'. Waiting...")
             time.sleep(POLL_INTERVAL)
@@ -79,7 +76,6 @@ def csv_handshake_worker():
 
         processed_links = get_processed_jobs()
         new_jobs = df[~df['link'].isin(processed_links)].copy()
-
         if new_jobs.empty:
             time.sleep(POLL_INTERVAL)
             continue
@@ -105,38 +101,34 @@ def csv_handshake_worker():
 
             source_filepath = find_job_file(job_id)
             if source_filepath:
-                print(f"[INFO] Found source file: {source_filepath}. Processing with all LLMs...")
+                print(f"[INFO] Found source file: {source_filepath}. Processing with all LLMs in parallel...")
                 source_text = get_text_from_file(source_filepath)
                 source_lang, target_lang = parse_languages(job['title'])
-
-                print("  -> Translating with GPT-4...")
-                gpt_translation = translate_with_gpt(source_text, target_lang, source_lang)
-                if not gpt_translation.startswith("Error:"):
-                    gpt_output_filename = f"job_{job_id}_{target_lang}_gpt.txt"
-                    with open(os.path.join(OUTPUTS_DIR, gpt_output_filename), 'w', encoding='utf-8') as f: f.write(gpt_translation)
-                    print(f"[SUCCESS] GPT translation saved to {gpt_output_filename}")
-                
-                print("  -> Translating with Claude...")
-                claude_translation = translate_with_claude(source_text, target_lang, source_lang)
-                if not claude_translation.startswith("Error:"):
-                    claude_output_filename = f"job_{job_id}_{target_lang}_claude.txt"
-                    with open(os.path.join(OUTPUTS_DIR, claude_output_filename), 'w', encoding='utf-8') as f: f.write(claude_translation)
-                    print(f"[SUCCESS] Claude translation saved to {claude_output_filename}")
-
-                print("  -> Translating with Gemini...")
-                gemini_translation = translate_with_gemini(source_text, target_lang, source_lang)
-                if not gemini_translation.startswith("Error:"):
-                    gemini_output_filename = f"job_{job_id}_{target_lang}_gemini.txt"
-                    with open(os.path.join(OUTPUTS_DIR, gemini_output_filename), 'w', encoding='utf-8') as f: f.write(gemini_translation)
-                    print(f"[SUCCESS] Gemini translation saved to {gemini_output_filename}")
-
+                translations = {}
+                threads = []
+                def run_translation(service, func):
+                    print(f"  -> Starting translation with {service}...")
+                    translations[service] = func(source_text, target_lang, source_lang)
+                    print(f"  -> Finished translation with {service}.")
+                gpt_thread = threading.Thread(target=run_translation, args=("gpt", translate_with_gpt))
+                claude_thread = threading.Thread(target=run_translation, args=("claude", translate_with_claude))
+                gemini_thread = threading.Thread(target=run_translation, args=("gemini", translate_with_gemini))
+                threads.extend([gpt_thread, claude_thread, gemini_thread])
+                for t in threads: t.start()
+                for t in threads: t.join()
+                print("[INFO] All translations complete. Saving results...")
+                for service, result in translations.items():
+                    if result and not result.startswith("Error:"):
+                        output_filename = f"job_{job_id}_{target_lang}_{service}.txt"
+                        with open(os.path.join(OUTPUTS_DIR, output_filename), 'w', encoding='utf-8') as f:
+                            f.write(result)
+                        print(f"[SUCCESS] {service.capitalize()} translation saved to {output_filename}")
                 log_processed_job(job_link)
                 print(f"[INFO] Job ID: {job_id} Finished & Logged.")
             else:
                 print(f"[ERROR] Timed out. File for job {job_id} not found.")
                 print("[INFO] Assuming job was rejected. Logging to prevent future alerts.")
                 log_processed_job(job_link)
-            
             active_handshake_jobs.discard(job_id)
 
 # --- Hot Folder Worker ---
@@ -148,23 +140,41 @@ class HotFolderHandler(FileSystemEventHandler):
         if job_id_match and job_id_match.group(1) in active_handshake_jobs:
             print(f"[INFO] Hot Folder: Ignoring file '{filename}' as it is being handled by the CSV worker.")
             return
-        
+
         print(f"\n[INFO] Hot Folder: Detected new ad-hoc file '{filename}'.")
         base_name = os.path.splitext(filename)[0]
         if '_to_' in base_name:
             parts = base_name.split('_to_')
             target_lang = parts[-1]
-            print(f"[INFO] Ad-hoc job detected. Translating to '{target_lang}'...")
-            
             source_text = get_text_from_file(event.src_path)
-            translation = translate_with_gpt(source_text, target_lang) # Defaulting to GPT for ad-hoc
-            
-            output_filename = f"{base_name}_translated_gpt.txt"
-            with open(os.path.join(OUTPUTS_DIR, output_filename), 'w', encoding='utf-8') as f:
-                f.write(translation)
-            print(f"[SUCCESS] Ad-hoc translation saved to {output_filename}")
+            print(f"[INFO] Ad-hoc job detected. Translating to '{target_lang}' with all LLMs in parallel...")
+            translations = {}
+            threads = []
+            def run_translation(service, func):
+                print(f"  -> Starting ad-hoc translation with {service}...")
+                translations[service] = func(source_text, target_lang)
+                print(f"  -> Finished ad-hoc translation with {service}.")
+            gpt_thread = threading.Thread(target=run_translation, args=("gpt", translate_with_gpt))
+            claude_thread = threading.Thread(target=run_translation, args=("claude", translate_with_claude))
+            gemini_thread = threading.Thread(target=run_translation, args=("gemini", translate_with_gemini))
+            threads.extend([gpt_thread, claude_thread, gemini_thread])
+            for t in threads: t.start()
+            for t in threads: t.join()
+            print("[INFO] All ad-hoc translations complete. Saving results...")
+            success_count = 0
+            for service, result in translations.items():
+                if result and not result.startswith("Error:"):
+                    output_filename = f"{base_name}_translated_{service}.txt"
+                    with open(os.path.join(OUTPUTS_DIR, output_filename), 'w', encoding='utf-8') as f:
+                        f.write(result)
+                    print(f"[SUCCESS] {service.capitalize()} ad-hoc translation saved to {output_filename}")
+                    success_count += 1
+            if success_count == 0:
+                print("[ERROR] All translation services failed for the ad-hoc job.")
 
+# --- THIS FUNCTION WAS MISSING ---
 def folder_monitor_worker():
+    """Initializes and runs the watchdog observer."""
     print("[INFO] Hot Folder Worker: Started.")
     observer = Observer()
     observer.schedule(HotFolderHandler(), UPLOADS_DIR, recursive=False)
@@ -174,11 +184,13 @@ def folder_monitor_worker():
     except KeyboardInterrupt:
         observer.stop()
     observer.join()
+# --- END MISSING FUNCTION ---
 
 # --- Main Thread Orchestrator ---
 if __name__ == "__main__":
     for d in [UPLOADS_DIR, OUTPUTS_DIR, "monitor"]:
         if not os.path.exists(d): os.makedirs(d)
+    
     csv_thread = threading.Thread(target=csv_handshake_worker)
     folder_thread = threading.Thread(target=folder_monitor_worker, daemon=True)
     
