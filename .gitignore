@@ -8,3 +8,5 @@ fetchers/__pycache__/*
 /__pycache__/*
 monitor/*
 app.log
+/outputs/*
+/tests/__pycache__/*
