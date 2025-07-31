@@ -102,7 +102,7 @@ To run the application reliably in the background and have it start automaticall
 **1. Create the Service File:**
    Create a new file at `~/.config/systemd/user/translator.service` and paste the following content into it.
 
-   **Important:** You **must** replace `/home/thomas/multi-llm-translator` with the absolute path to your project directory.
+   **Important:** You **must** replace `/home/multi-llm-translator` with the absolute path to your project directory.
 
    ```ini
    [Unit]
@@ -111,10 +111,10 @@ To run the application reliably in the background and have it start automaticall
 
    [Service]
    # Replace with the absolute path to your project's root directory
-   WorkingDirectory=/home/thomas/multi-llm-translator
+   WorkingDirectory=/home/multi-llm-translator
 
    # Replace with the absolute path to the python executable in your .venv
-   ExecStart=/home/thomas/multi-llm-translator/.venv/bin/python /home/thomas/multi-llm-translator/run_service.py
+   ExecStart=/home/multi-llm-translator/.venv/bin/python /home/multi-llm-translator/run_service.py
 
    Restart=on-failure
    RestartSec=5s
