@@ -163,4 +163,3 @@ The UI sidebar allows you to change the `OPERATION_MODE`, `PRIMARY_MODEL`, and `
 ## License
 
 This project is licensed under the **0BSD License**. See the `LICENSE` file for details.
-```
