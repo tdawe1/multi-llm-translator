@@ -2,8 +2,9 @@
 
 # A script to clean the uploads folder and create fresh test files.
 
-echo "[INFO] Clearing the 'uploads/' directory..."
+echo "[INFO] Clearing the 'uploads/' and 'outputs' directories..."
 rm -f uploads/*
+rm -f outputs/*
 
 
 echo "[INFO] Creating new test files for .txt, .docx, .pptx, and .xlsx..."
