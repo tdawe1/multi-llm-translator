@@ -18,5 +18,5 @@ def translate_with_gemini(text: str, target_language: str, source_language: str 
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        print(f"An error occurred with the Google Generative AI API: {e}")
+        print(f"[ERROR] An error occurred with the Google Generative AI API: {e}")
         return f"Error: Gemini translation failed. {e}"

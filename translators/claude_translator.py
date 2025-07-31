@@ -21,6 +21,6 @@ def translate_with_claude(text: str, target_language: str, source_language: str 
         )
         return message.content[0].text
     except Exception as e:
-        print(f"An error occurred with the Anthropic API: {e}")
+        print(f"[ERROR] An error occurred with the Anthropic API: {e}")
         return f"Error: Claude translation failed. {e}"
 

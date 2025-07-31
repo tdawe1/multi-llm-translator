@@ -45,5 +45,5 @@ def translate_with_gpt(text: str, target_language: str, source_language: str = "
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"An error occurred while calling the OpenAI API: {e}")
+        print(f"[ERROR] An error occurred with the OpenAI API: {e}")
         return f"Error: Translation failed. {e}"
