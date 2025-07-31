@@ -1,22 +1,8 @@
 {
   "Multi-LLM Translation Assistant": "Multi-LLM Translation Assistant",
   "VSCode": "Visual Studio Code",
-  "Streamlit": "Streamlit"
-}```
-
-**C. Set up Logging in `app.py`:** At the very top of `app.py`, right after the imports, add the logging configuration. This will replace ALL `print` statements.
-
-```python
-# ... imports ...
-import logging
-
-# --- Setup Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("app.log"), # Log to a file
-        logging.StreamHandler()         # Log to the console
-    ]
-)
-# ...
+  "Streamlit": "Streamlit",
+  "GengoWatcher": "GengoWatcher",
+  "Arch Linux": "Arch Linux",
+  "OpenAI": "OpenAI"
+}
