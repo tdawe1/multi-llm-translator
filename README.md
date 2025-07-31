@@ -32,7 +32,7 @@ While `GengoWatcher-Public` excels at finding and notifying you of new translati
 ## How It Works
 
 1.  **Monitor**: The application runs in two parallel threads:
-    - A **CSV Worker** watches `monitor/jobs_feed.csv` for new entries. **<- This is where it integrates with GengoWatcher!**
+    - A **CSV Worker** watches `monitor/jobs_feed.csv` for new entries.
     - A **Hot Folder Worker** watches the `uploads/` directory for any new files.
 2.  **Fetch**: When a job is triggered, the tool extracts all text from the source document (`.txt`, `.docx`, etc.).
 3.  **Process**: Based on the `OPERATION_MODE` set in your `.env` file, it either translates the text in parallel or runs the advanced critique workflow.
