@@ -1,4 +1,3 @@
-# app.py
 import pandas as pd
 import os
 import time
@@ -12,6 +11,20 @@ from translators.gpt_translator import translate_with_gpt
 from translators.claude_translator import translate_with_claude
 from translators.gemini_translator import translate_with_gemini
 from fetchers.file_fetcher import get_text_from_file
+
+from config import DUMMY_MODE
+from translators.dummy_translator import (
+    dummy_translate_with_gpt,
+    dummy_translate_with_claude,
+    dummy_translate_with_gemini
+)
+
+# --- DUMMY MODE SWITCH ---
+if DUMMY_MODE:
+    print("[ALERT] DUMMY MODE IS ACTIVE. NO REAL API CALLS WILL BE MADE.")
+    translate_with_gpt = dummy_translate_with_gpt
+    translate_with_claude = dummy_translate_with_claude
+    translate_with_gemini = dummy_translate_with_gemini
 
 # --- Configuration ---
 JOBS_FEED_CSV_PATH = "monitor/jobs_feed.csv"
