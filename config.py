@@ -25,3 +25,4 @@ DUMMY_MODE = os.getenv("DUMMY_MODE", "False").upper() == 'TRUE'
 # --- Inter-Process Communication ---
 # The path to a file that the service will create to signal the UI to reload.
 UI_RELOAD_SIGNAL_PATH = "monitor/.trigger_reload"
+CONFIG_RELOAD_SIGNAL_PATH = "monitor/.trigger_config_reload"

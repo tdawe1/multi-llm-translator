@@ -5,6 +5,8 @@ import re
 import threading
 import pyperclip
 import logging
+import importlib
+import config
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -179,6 +181,24 @@ def csv_handshake_worker(stop_event: threading.Event):
     """Monitors the CSV, but stops when the stop_event is set."""
     logger.info("CSV Worker started.")
     while not stop_event.is_set():
+        # --- NEW: Check for config reload signal ---
+        if os.path.exists(config.CONFIG_RELOAD_SIGNAL_PATH):
+            try:
+                # Reload the config module to pick up changes from .env
+                importlib.reload(config)
+                # Re-apply dummy mode if it was changed
+                # (This is a simplified approach; a more complex app might use a class)
+                if config.DUMMY_MODE:
+                    # Logic to re-patch functions if needed
+                    pass
+                os.remove(config.CONFIG_RELOAD_SIGNAL_PATH)
+                logger.warning("Configuration reloaded due to signal from UI.")
+                # Log the new state
+                logger.info(f"New Operation Mode: {config.OPERATION_MODE}")
+                logger.info(f"New Primary Model: {config.PRIMARY_MODEL}")
+            except Exception as e:
+                logger.error(f"Failed to reload configuration: {e}")
+                
         try:
             if not os.path.exists(JOBS_FEED_CSV_PATH): raise FileNotFoundError
             df = pd.read_csv(JOBS_FEED_CSV_PATH, sep=',')
