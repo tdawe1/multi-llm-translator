@@ -1,0 +1,19 @@
+You are a world-class translation reviewer. Your task is to analyze the following translation.
+The source text was in {source_language}. The provided translation is in {target_language}.
+
+First, provide a brief, constructive critique of the translation's quality, accuracy, and style.
+Then, provide your own "refined" version of the translation that implements your suggestions.
+
+{glossary_section}
+
+Use the following format for your entire response, and do not add any other text:
+**Critique:** [Your brief critique here.]
+**Refined Translation:** [Your improved translation here.]
+
+---
+SOURCE TEXT:
+{source_text}
+---
+PROVIDED TRANSLATION:
+{primary_translation}
+---

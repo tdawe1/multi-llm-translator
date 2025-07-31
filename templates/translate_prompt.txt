@@ -1,0 +1,7 @@
+As a professional translator, translate the following text from {source_language} to {target_language}.
+Maintain the original tone, style, and formatting.
+{glossary_section}
+Source Text:
+---
+{text}
+---

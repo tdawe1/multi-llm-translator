@@ -20,6 +20,8 @@ from translators.dummy_translator import (
 from regenerators.docx_regenerator import create_docx_from_text
 from regenerators.pptx_regenerator import create_pptx_from_text
 from regenerators.xlsx_regenerator import create_xlsx_from_text
+from config import OPERATION_MODE, PRIMARY_MODEL
+
 
 # --- DUMMY MODE SWITCH ---
 if DUMMY_MODE:
@@ -116,55 +118,115 @@ def csv_handshake_worker():
 
             source_filepath = find_job_file(job_id)
             if source_filepath:
-                print(f"[INFO] Found source file: {source_filepath}. Processing with all LLMs in parallel...")
+                import logging
+                logging.info(f"CSV Worker started in '{OPERATION_MODE}' mode with primary model '{PRIMARY_MODEL}'.")
                 source_text = get_text_from_file(source_filepath)
                 source_lang, target_lang = parse_languages(job['title'])
-                translations = {}
-                threads = []
-                def run_translation(service, func):
-                    print(f"  -> Starting translation with {service}...")
-                    translations[service] = func(source_text, target_lang, source_lang)
-                    print(f"  -> Finished translation with {service}.")
-                gpt_thread = threading.Thread(target=run_translation, args=("gpt", translate_with_gpt))
-                claude_thread = threading.Thread(target=run_translation, args=("claude", translate_with_claude))
-                gemini_thread = threading.Thread(target=run_translation, args=("gemini", translate_with_gemini))
-                threads.extend([gpt_thread, claude_thread, gemini_thread])
-                for t in threads: t.start()
-                for t in threads: t.join()
-                print("[INFO] All translations complete. Saving results...")
-                # --- NEW REGENERATION LOGIC using a dictionary ---
-                REGENERATORS = {
-                    '.docx': create_docx_from_text,
-                    '.pptx': create_pptx_from_text,
-                    '.xlsx': create_xlsx_from_text,
-                }
-                # Determine the file extension of the original source file
-                original_extension = os.path.splitext(source_filepath)[1]
-                # Check if we have a special regenerator for this file type
-                regenerator_func = REGENERATORS.get(original_extension)
 
-                for service, result in translations.items():
-                    if result and not result.startswith("Error:"):
-                        base_name_without_ext = os.path.splitext(os.path.basename(source_filepath))[0]
-                        if regenerator_func:
-                            # Use the special regenerator
-                            output_filename = f"{base_name_without_ext}_{service}{original_extension}"
-                            output_path = os.path.join(OUTPUTS_DIR, output_filename)
-                            regen_status = regenerator_func(source_filepath, result, output_path)
-                            if regen_status.startswith("Error:"):
-                                print(f"[ERROR] {service.capitalize()}: {regen_status}")
-                            else:
-                                print(f"[SUCCESS] {service.capitalize()} translation regenerated to {output_filename}")
+                models = {
+                    "gpt": {"translate": translate_with_gpt, "critique": critique_with_gpt},
+                    "claude": {"translate": translate_with_claude, "critique": critique_with_claude},
+                    "gemini": {"translate": translate_with_gemini, "critique": critique_with_gemini},
+                }
+
+                if OPERATION_MODE == 'SIMPLE':
+                    logging.info(f"Running SIMPLE translation for job {job_id} with {PRIMARY_MODEL}...")
+                    primary_func = models[PRIMARY_MODEL]['translate']
+                    translation = primary_func(source_text, target_lang, source_lang)
+                    # Save the single translation
+                    base_name_without_ext = os.path.splitext(os.path.basename(source_filepath))[0]
+                    original_extension = os.path.splitext(source_filepath)[1]
+                    REGENERATORS = {
+                        '.docx': create_docx_from_text,
+                        '.pptx': create_pptx_from_text,
+                        '.xlsx': create_xlsx_from_text,
+                    }
+                    regenerator_func = REGENERATORS.get(original_extension)
+                    if regenerator_func:
+                        output_filename = f"{base_name_without_ext}_{PRIMARY_MODEL}{original_extension}"
+                        output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                        regen_status = regenerator_func(source_filepath, translation, output_path)
+                        if regen_status.startswith("Error:"):
+                            logging.error(f"{PRIMARY_MODEL.capitalize()}: {regen_status}")
                         else:
-                            # Fallback for .txt files
-                            output_filename = f"{base_name_without_ext}_{service}.txt"
-                            output_path = os.path.join(OUTPUTS_DIR, output_filename)
-                            with open(output_path, 'w', encoding='utf-8') as f:
-                                f.write(result)
-                            print(f"[SUCCESS] {service.capitalize()} translation saved to {output_filename}")
-                # --- END NEW REGENERATION LOGIC ---
+                            logging.info(f"{PRIMARY_MODEL.capitalize()} translation regenerated to {output_filename}")
+                    else:
+                        output_filename = f"{base_name_without_ext}_{PRIMARY_MODEL}.txt"
+                        output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                        with open(output_path, 'w', encoding='utf-8') as f:
+                            f.write(translation)
+                        logging.info(f"{PRIMARY_MODEL.capitalize()} translation saved to {output_filename}")
+
+                elif OPERATION_MODE == 'PARALLEL':
+                    logging.info(f"Running PARALLEL translation for job {job_id}...")
+                    translations = {}
+                    threads = []
+                    def run_translation(service, func):
+                        translations[service] = func(source_text, target_lang, source_lang)
+                    for name, funcs in models.items():
+                        thread = threading.Thread(target=run_translation, args=(name, funcs['translate']))
+                        threads.append(thread)
+                        thread.start()
+                    for thread in threads:
+                        thread.join()
+                    # Save all translations
+                    REGENERATORS = {
+                        '.docx': create_docx_from_text,
+                        '.pptx': create_pptx_from_text,
+                        '.xlsx': create_xlsx_from_text,
+                    }
+                    original_extension = os.path.splitext(source_filepath)[1]
+                    regenerator_func = REGENERATORS.get(original_extension)
+                    base_name_without_ext = os.path.splitext(os.path.basename(source_filepath))[0]
+                    for service, result in translations.items():
+                        if result and not result.startswith("Error:"):
+                            if regenerator_func:
+                                output_filename = f"{base_name_without_ext}_{service}{original_extension}"
+                                output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                                regen_status = regenerator_func(source_filepath, result, output_path)
+                                if regen_status.startswith("Error:"):
+                                    logging.error(f"{service.capitalize()}: {regen_status}")
+                                else:
+                                    logging.info(f"{service.capitalize()} translation regenerated to {output_filename}")
+                            else:
+                                output_filename = f"{base_name_without_ext}_{service}.txt"
+                                output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                                with open(output_path, 'w', encoding='utf-8') as f:
+                                    f.write(result)
+                                logging.info(f"{service.capitalize()} translation saved to {output_filename}")
+
+                elif OPERATION_MODE == 'CRITIQUE':
+                    logging.info(f"Running CRITIQUE for job {job_id} with primary model {PRIMARY_MODEL}...")
+                    primary_func = models[PRIMARY_MODEL]['translate']
+                    logging.info(f"  -> Step 1: Generating primary translation with {PRIMARY_MODEL}...")
+                    primary_translation = primary_func(source_text, target_lang, source_lang)
+                    if primary_translation.startswith("Error:"):
+                        logging.error(f"Primary translation failed for job {job_id}. Aborting critique.")
+                    else:
+                        logging.info("  -> Step 2: Generating critiques with reviewer models in parallel...")
+                        critiques = {}
+                        threads = []
+                        reviewer_models = {k: v for k, v in models.items() if k != PRIMARY_MODEL}
+                        def run_critique(service, func):
+                            critiques[service] = func(source_text, primary_translation, target_lang, source_lang)
+                        for name, funcs in reviewer_models.items():
+                            thread = threading.Thread(target=run_critique, args=(name, funcs['critique']))
+                            threads.append(thread)
+                            thread.start()
+                        for thread in threads:
+                            thread.join()
+                        # --- Combine and Save Final Report ---
+                        final_report = f"--- SOURCE TEXT ---\n{source_text}\n\n"
+                        final_report += f"--- PRIMARY TRANSLATION ({PRIMARY_MODEL.upper()}) ---\n{primary_translation}\n\n"
+                        for service, critique_text in critiques.items():
+                            final_report += f"--- CRITIQUE & REFINEMENT ({service.upper()}) ---\n{critique_text}\n\n"
+                        output_filename = f"job_{job_id}_{target_lang}_CRITIQUE_REPORT.md"
+                        with open(os.path.join(OUTPUTS_DIR, output_filename), 'w', encoding='utf-8') as f:
+                            f.write(final_report)
+                        logging.info(f"Successfully saved CRITIQUE_REPORT for job {job_id}.")
+
                 log_processed_job(job_link)
-                print(f"[INFO] Job ID: {job_id} Finished & Logged.")
+                logging.info(f"Job ID: {job_id} Finished & Logged.")
             else:
                 print(f"[ERROR] Timed out. File for job {job_id} not found.")
                 print("[INFO] Assuming job was rejected. Logging to prevent future alerts.")
