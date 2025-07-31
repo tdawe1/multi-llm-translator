@@ -148,3 +148,8 @@ As you can see, costs can rise quickly with the more advanced modes.
 - [ ] **Streamlit UI**: Build the user interface for reviewing translations side-by-side.
 - [ ] **Advanced Regeneration**: Add support for preserving more complex formatting (styles, tables, images).
 - [ ] **Job Status Tracking**: Implement a more robust system for tracking job status (`pending`, `processed`, `error`).
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+```
