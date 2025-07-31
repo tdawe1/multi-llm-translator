@@ -1,12 +1,19 @@
 import json
+import logging
 from config import GLOSSARY_PATH
 
 def load_glossary() -> dict:
     try:
         with open(GLOSSARY_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            glossary = json.load(f)
+            logging.info(f"Successfully loaded glossary from '{GLOSSARY_PATH}' with {len(glossary)} terms.")
+            return glossary
     except FileNotFoundError:
-        return {} # Return empty dict if no glossary exists
+        logging.warning(f"Glossary file not found at '{GLOSSARY_PATH}'. Continuing without it.")
+        return {}
+    except json.JSONDecodeError:
+        logging.error(f"Could not decode JSON from '{GLOSSARY_PATH}'. Please check its format. Continuing without glossary.")
+        return {}
 
 def get_prompt_with_glossary(template_path: str, placeholders: dict) -> str:
     """Reads a prompt template, injects the glossary, and fills placeholders."""
