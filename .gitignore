@@ -1,4 +1,10 @@
-.venv
+.venv/*
 .env
 monitor/all_entries.csv
-.env
+uploads/*
+translators/__pycache__/*
+regenerators/__pycache__/*
+fetchers/__pycache__/*
+/__pycache__/*
+monitor/*
+app.log
