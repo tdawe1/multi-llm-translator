@@ -6,7 +6,7 @@ An automated Python translation assistant that monitors for jobs, processes docu
 
 ---
 
-`![Main User Interface](https://raw.githubusercontent.com/tdawe1/multi-llm-translator/main/assets/ui.png)`
+![Main User Interface](https'://raw.githubusercontent.com/tdawe1/multi-llm-translator/main/assets/screenshot-main-ui.png')
 
 ## Overview
 
