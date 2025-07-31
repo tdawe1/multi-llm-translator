@@ -6,7 +6,7 @@ import threading
 import pyperclip
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-
+from regenerators.docx_regenerator import create_docx_from_text
 from translators.gpt_translator import translate_with_gpt
 from translators.claude_translator import translate_with_claude
 from translators.gemini_translator import translate_with_gemini
@@ -130,12 +130,27 @@ def csv_handshake_worker():
                 for t in threads: t.start()
                 for t in threads: t.join()
                 print("[INFO] All translations complete. Saving results...")
+
+                # Save results from the completed translations
                 for service, result in translations.items():
                     if result and not result.startswith("Error:"):
-                        output_filename = f"job_{job_id}_{target_lang}_{service}.txt"
-                        with open(os.path.join(OUTPUTS_DIR, output_filename), 'w', encoding='utf-8') as f:
-                            f.write(result)
-                        print(f"[SUCCESS] {service.capitalize()} translation saved to {output_filename}")
+                        # --- NEW REGENERATION LOGIC ---
+                        if source_filepath.endswith('.docx'):
+                            output_filename = f"job_{job_id}_{target_lang}_{service}.docx"
+                            output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                            # Call the regenerator instead of writing a .txt
+                            regen_status = create_docx_from_text(source_filepath, result, output_path)
+                            if regen_status.startswith("Error:"):
+                                print(f"[ERROR] {service.capitalize()}: {regen_status}")
+                            else:
+                                print(f"[SUCCESS] {service.capitalize()} translation regenerated to {output_filename}")
+                        else: # Fallback for .txt files
+                            output_filename = f"job_{job_id}_{target_lang}_{service}.txt"
+                            output_path = os.path.join(OUTPUTS_DIR, output_filename)
+                            with open(output_path, 'w', encoding='utf-8') as f:
+                                f.write(result)
+                            print(f"[SUCCESS] {service.capitalize()} translation saved to {output_filename}")
+                        # --- END NEW REGENERATION LOGIC ---
                 log_processed_job(job_link)
                 print(f"[INFO] Job ID: {job_id} Finished & Logged.")
             else:
